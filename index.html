@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Access Terminal</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Hacker font -->
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg: #020408;
+      --accent: #00ff9c;
+      --accent-soft: rgba(0, 255, 156, 0.4);
+      --danger: #ff2965;
+      --text: #e0ffee;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Share Tech Mono", monospace;
+      background: radial-gradient(circle at top, #051018 0, #020408 45%, #000 100%);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Moving grid background */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0, 255, 156, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 255, 156, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridMove 25s linear infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    @keyframes gridMove {
+      from { background-position: 0 0, 0 0; }
+      to   { background-position: 200px 200px, 200px 200px; }
+    }
+
+    /* Scanline overlay */
+    .scanlines {
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.4) 0px,
+        rgba(0, 0, 0, 0.4) 2px,
+        rgba(0, 0, 0, 0.2) 3px
+      );
+      mix-blend-mode: multiply;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Main terminal card */
+    .terminal {
+      position: relative;
+      z-index: 2;
+      width: min(900px, 95vw);
+      border-radius: 18px;
+      border: 1px solid var(--accent-soft);
+      background: radial-gradient(circle at 10% 0%, rgba(0, 255, 156, 0.25), transparent 50%)
+                  ,rgba(0, 0, 0, 0.85);
+      box-shadow:
+        0 0 25px rgba(0, 255, 156, 0.3),
+        0 0 80px rgba(0, 0, 0, 0.9);
+      padding: 18px 22px 22px;
+      backdrop-filter: blur(4px);
+      overflow: hidden;
+    }
+
+    .terminal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ff5f57;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    }
+    .dot:nth-child(2) { background: #febc2e; }
+    .dot:nth-child(3) { background: #28c840; }
+
+    .term-title {
+      font-size: 0.85rem;
+      opacity: 0.8;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .status-pill {
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 255, 156, 0.4);
+      background: radial-gradient(circle at 0 0, rgba(0, 255, 156, 0.35), transparent 65%);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .terminal-body {
+      display: grid;
+      grid-template-columns: 1.2fr 0.9fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 780px) {
+      .terminal-body {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left: fake log */
+    .log-panel {
+      border-radius: 14px;
+      border: 1px solid rgba(0, 255, 156, 0.25);
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      max-height: 260px;
+      overflow-y: auto;
+      background: radial-gradient(circle at 100% 0%, rgba(0, 255, 156, 0.1), transparent 60%);
+    }
+
+    .log-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 2px;
+    }
+
+    .log-prefix-ok {
+      color: var(--accent);
+    }
+    .log-prefix-warn {
+      color: #ffdd57;
+    }
+    .log-prefix-err {
+      color: var(--danger);
+    }
+
+    .blink-cursor::after {
+      content: "▌";
+      animation: blink 1s step-end infinite;
+      margin-left: 4px;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    /* Right: login card */
+    .auth-panel {
+      border-radius: 14px;
+      border: 1px solid rgba(0, 255, 156, 0.3);
+      padding: 14px 14px 16px;
+      background: radial-gradient(circle at 0 100%, rgba(0, 255, 156, 0.15), transparent 60%);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .auth-title {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      opacity: 0.9;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .auth-title span.small {
+      font-size: 0.7rem;
+      opacity: 0.7;
+    }
+
+    label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      opacity: 0.8;
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .input {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 255, 156, 0.4);
+      background: rgba(2, 8, 10, 0.85);
+      outline: none;
+      color: var(--accent);
+      font-family: "Share Tech Mono", monospace;
+      font-size: 0.9rem;
+      letter-spacing: 0.08em;
+      transition: border 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+    }
+
+    .input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 10px rgba(0, 255, 156, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn {
+      margin-top: 6px;
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--accent);
+      background: radial-gradient(circle at 50% 0, rgba(0, 255, 156, 0.5), rgba(0, 0, 0, 1));
+      color: #00110a;
+      font-family: "Share Tech Mono", monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.08s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover {
+      box-shadow:
+        0 0 18px rgba(0, 255, 156, 0.7),
+        0 0 40px rgba(0, 255, 156, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px) scale(0.98);
+      box-shadow: 0 0 6px rgba(0, 255, 156, 0.6);
+    }
+
+    .btn::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg,
+        transparent,
+        rgba(255, 255, 255, 0.3),
+        transparent);
+      transform: translateX(-100%);
+      animation: btnShine 2.3s infinite;
+      pointer-events: none;
+    }
+
+    @keyframes btnShine {
+      0%   { transform: translateX(-130%); }
+      45%  { transform: translateX(130%); }
+      100% { transform: translateX(130%); }
+    }
+
+    .fields {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    /* Disable page scrolling */
+    html, body {
+    overflow: hidden;
+    }
+
+    /* Hide scrollbar visually but keep scroll functionality */
+    .log-panel {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE / Edge */
+    }
+
+    .log-panel::-webkit-scrollbar {
+    display: none;                  /* Chrome / Safari */
+    }
+
+    /* Result banner */
+    .result {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px dashed rgba(0, 255, 156, 0.5);
+      font-size: 0.85rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-align: center;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(5px) scale(0.98);
+      transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .result.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    .result.success {
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 0 20px rgba(0, 255, 156, 0.7);
+      animation: grantedPulse 1.4s ease-out;
+    }
+
+    @keyframes grantedPulse {
+      0% { transform: scale(0.95); }
+      40% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .result.fail {
+      border-color: var(--danger);
+      color: var(--danger);
+      box-shadow: 0 0 14px rgba(255, 0, 90, 0.7);
+      animation: deniedShake 0.4s ease-in-out;
+    }
+
+    @keyframes deniedShake {
+      0%   { transform: translateX(0); }
+      20%  { transform: translateX(-4px); }
+      40%  { transform: translateX(4px); }
+      60%  { transform: translateX(-3px); }
+      80%  { transform: translateX(3px); }
+      100% { transform: translateX(0); }
+    }
+
+    .subtext {
+      margin-top: 6px;
+      font-size: 0.7rem;
+      opacity: 0.6;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+  <div class="scanlines"></div>
+
+  <div class="terminal">
+    <div class="terminal-header">
+      <div class="window-dots">
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+      </div>
+      <div class="term-title">/dev/Access_Terminal</div>
+      <div class="status-pill">STATUS: ONLINE</div>
+    </div>
+
+    <div class="terminal-body">
+      <!-- Left side: fake logs -->
+      <div class="log-panel" id="log-panel">
+        <div class="log-line"><span class="log-prefix-ok">[BOOT]</span> Initializing core subsystems...</div>
+        <div class="log-line"><span class="log-prefix-ok">[OK]</span> Entropy pool seeded</div>
+        <div class="log-line"><span class="log-prefix-warn">[WARN]</span> Trust module not found</div>
+        <div class="log-line"><span class="log-prefix-ok">[OK]</span> Cipher suite loaded</div>
+        <div class="log-line blink-cursor" id="prompt-line">&gt; awaiting team credentials...</div>
+      </div>
+
+      <!-- Right side: auth -->
+      <div class="auth-panel">
+        <div class="auth-title">
+          <span>TEAM AUTH</span>
+          <span class="small">MODE:&nbsp;SECURE</span>
+        </div>
+
+        <form id="auth-form">
+          <div class="fields">
+            <div>
+              <label for="team-id">Team ID</label>
+              <input
+                class="input"
+                id="team-id"
+                name="team-id"
+                autocomplete="off"
+                placeholder="e.g. TEAM01"
+                required
+              />
+            </div>
+
+            <div>
+              <label for="password">Access Key</label>
+              <input
+                class="input"
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="off"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          </div>
+
+          <button class="btn" type="submit">
+            INITIATE &nbsp;▶
+          </button>
+        </form>
+
+        <div id="result" class="result"></div>
+        <div class="subtext">credentials validated against secure sheet &lt;teams.csv&gt;</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------
+    // Credential storage (from CSV)
+    // ---------------------------
+    const credentialMap = new Map();
+
+    // Some demo fallback data (used if CSV load fails)
+    const fallbackCredentials = {
+      "TEAM01": "secret123",
+      "TEAM02": "hackme",
+      "ALPHA": "root42",
+      "BETA": "letmein"
+    };
+
+    function loadFallbackCredentials() {
+      for (const [id, pass] of Object.entries(fallbackCredentials)) {
+        credentialMap.set(id, pass);
+      }
+      addLogLine("[WARN] teams.csv not found, using fallback demo credentials", "warn");
+    }
+
+    async function loadCredentialsFromCSV() {
+      try {
+        const res = await fetch("teams.csv", { cache: "no-store" });
+
+        if (!res.ok) {
+          // Probably file missing
+          loadFallbackCredentials();
+          return;
+        }
+
+        const text = await res.text();
+        const lines = text.split(/\r?\n/);
+
+        let count = 0;
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) continue;
+
+          const parts = line.split(",");
+          if (parts.length < 2) continue;
+
+          const teamId = parts[0].trim();
+          const password = parts[1].trim();
+
+          if (teamId && password) {
+            credentialMap.set(teamId, password);
+            count++;
+          }
+        }
+
+        addLogLine(`[OK] Loaded ${count} credential record(s) from teams.csv`, "ok");
+      } catch (err) {
+        console.error(err);
+        loadFallbackCredentials();
+      }
+    }
+
+    // ---------------------------
+    // Log animation
+    // ---------------------------
+    const logPanel = document.getElementById("log-panel");
+    const promptLine = document.getElementById("prompt-line");
+
+    const noiseLines = [
+      "[SCAN] Probing memory sectors...",
+      "[OK] Quantum jitter within safe bounds",
+      "[TRACE] Monitoring team authentication attempts",
+      "[INFO] Syncing with leaderboard cluster...",
+      "[WARN] Unverified client fingerprint detected",
+      "[OK] Log channel /dev/ctf/log bound",
+      "[DBG] Ghost packets ignored",
+      "[CHK] Sheet integrity checksum valid"
+    ];
+
+    function addLogLine(text, level = "info") {
+      const div = document.createElement("div");
+      div.className = "log-line";
+
+      const span = document.createElement("span");
+      if (level === "ok") span.className = "log-prefix-ok";
+      else if (level === "warn") span.className = "log-prefix-warn";
+      else if (level === "err") span.className = "log-prefix-err";
+
+      if (span.className) {
+        span.textContent =
+          level === "ok" ? "[OK] " :
+          level === "warn" ? "[WARN] " :
+          level === "err" ? "[ERR] " : "[INFO] ";
+        div.appendChild(span);
+        div.append(" " + text.replace(/^\[(OK|WARN|ERR|INFO)]\s*/i, ""));
+      } else {
+        div.textContent = text;
+      }
+
+      logPanel.insertBefore(div, promptLine);
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    setInterval(() => {
+      const msg = noiseLines[Math.floor(Math.random() * noiseLines.length)];
+      addLogLine(msg, Math.random() < 0.2 ? "warn" : "ok");
+    }, 2000);
+
+    // ---------------------------
+    // Form logic
+    // ---------------------------
+    const form = document.getElementById("auth-form");
+    const resultEl = document.getElementById("result");
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const teamInput = document.getElementById("team-id");
+      const passInput = document.getElementById("password");
+
+      const teamId = teamInput.value.trim();
+      const password = passInput.value.trim();
+
+      if (!teamId || !password) return;
+
+      const storedPassword = credentialMap.get(teamId);
+
+      if (storedPassword && storedPassword === password) {
+        showResult(true, teamId);
+      } else {
+        showResult(false, teamId);
+      }
+
+      passInput.value = "";
+      passInput.focus();
+    });
+
+    function showResult(isGranted, teamId) {
+      resultEl.classList.remove("success", "fail", "visible");
+
+      if (isGranted) {
+        resultEl.textContent = `ACCESS GRANTED :: ${teamId}`;
+        resultEl.classList.add("success", "visible");
+        addLogLine(`[OK] Access granted for team ${teamId}`, "ok");
+      } else {
+        resultEl.textContent = "ACCESS DENIED";
+        resultEl.classList.add("fail", "visible");
+        addLogLine(`[ERR] Invalid credentials for team ${teamId}`, "err");
+      }
+    }
+
+    // ---------------------------
+    // Init
+    // ---------------------------
+    window.addEventListener("load", () => {
+      loadCredentialsFromCSV();
+    });
+  </script>
+</body>
+</html>
